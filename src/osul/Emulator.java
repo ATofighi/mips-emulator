@@ -31,6 +31,8 @@ public class Emulator {
     private int addedPc = 0;
     private int pc = startLine;
 
+    private int writeBackData = 0;
+
     public Emulator(FileChooser inputFile, FileChooser outputFile) {
         this.inputFile = inputFile;
     }
@@ -86,69 +88,74 @@ public class Emulator {
 //        int PCSrc = 0;
         int instruction = IFID.getOrDefault("instruction", 0);
         InstrucitonHelper instrucitonHelper = new InstrucitonHelper(instruction);
-        if (instrucitonHelper.getOpcode() == 0) { // R-type
-            if (!instrucitonHelper.getInstructionName().isEmpty()) { // R-Type but not stall
-                ALUOp0 = 0;
-                ALUOp1 = 1;
-            }
+        if (hazardDetection() || beqHazard()) {
+            pc -= 4;
+            // stall
         } else {
-            switch (instrucitonHelper.getInstructionName()) { // I-type
-                case "lw":
-                case "sw":
-                    ALUOp0 = ALUOp1 = 0;
+            if (instrucitonHelper.getOpcode() == 0) { // R-type
+                if (!instrucitonHelper.getInstructionName().isEmpty()) { // R-Type but not stall
+                    ALUOp0 = 0;
+                    ALUOp1 = 1;
+                }
+            } else {
+                switch (instrucitonHelper.getInstructionName()) { // I-type
+                    case "lw":
+                    case "sw":
+                        ALUOp0 = ALUOp1 = 0;
+                        break;
+                    case "beq":
+                        ALUOp0 = 1;
+                        ALUOp1 = 0;
+                        break;
+                }
+
+            }
+
+            switch (instrucitonHelper.getInstructionName()) {
+                case "add":
+                case "sub":
+                case "and":
+                case "or":
+                case "nor":
+                case "slt":
+                    regWrite = 1;
+                    ALUSrc = 0;
+                    memWrite = 0;
+                    memToReg = 0;
+                    memRead = 0;
+                    branch = 0;
+                    regDst = 1;
                     break;
                 case "beq":
-                    ALUOp0 = 1;
-                    ALUOp1 = 0;
+                    regWrite = 0;
+                    ALUSrc = 0;
+                    memWrite = 0;
+                    memToReg = 0;
+                    memRead = 0;
+                    branch = 1;
+                    regDst = 0;
+                    break;
+                case "lw":
+                    regWrite = 1;
+                    ALUSrc = 1;
+                    memWrite = 0;
+                    memToReg = 1;
+                    memRead = 1;
+                    branch = 0;
+                    regDst = 0;
+                    break;
+                case "sw":
+                    regWrite = 0;
+                    ALUSrc = 1;
+                    memWrite = 1;
+                    memToReg = 0;
+                    memRead = 0;
+                    branch = 0;
+                    regDst = 0;
                     break;
             }
-
         }
-
-        switch (instrucitonHelper.getInstructionName()) {
-            case "add":
-            case "sub":
-            case "and":
-            case "or":
-            case "nor":
-            case "slt":
-                regWrite = 1;
-                ALUSrc = 0;
-                memWrite = 0;
-                memToReg = 0;
-                memRead = 0;
-                branch = 0;
-                regDst = 1;
-                break;
-            case "beq":
-                regWrite = 0;
-                ALUSrc = 0;
-                memWrite = 0;
-                memToReg = 0;
-                memRead = 0;
-                branch = 1;
-                regDst = 0;
-                break;
-            case "lw":
-                regWrite = 1;
-                ALUSrc = 1;
-                memWrite = 0;
-                memToReg = 1;
-                memRead = 1;
-                branch = 0;
-                regDst = 0;
-                break;
-            case "sw":
-                regWrite = 0;
-                ALUSrc = 1;
-                memWrite = 1;
-                memToReg = 0;
-                memRead = 0;
-                branch = 0;
-                regDst = 0;
-                break;
-        }
-        IDEX.clear();
+//        IDEX.clear();
         IDEX.putAll(IFID);
         IDEX.put("regWrite", regWrite);
         IDEX.put("regDst", regDst);
@@ -169,23 +176,43 @@ public class Emulator {
     }
 
     private void execution() {
+        int calculatedForwarding = EXMEM.getOrDefault("calculated", 0);
         EXMEM.clear();
         EXMEM.putAll(IDEX);
         EXMEM.put("addedPc", IDEX.getOrDefault("pc", 0) + IDEX.getOrDefault("immediate", 0) << 2);
         addedPc = EXMEM.getOrDefault("addedPc", 0);
         {
             int x;
-            if (IDEX.getOrDefault("ALUSrc", 0) == 0) {
-                x = IDEX.getOrDefault("data2", 0);
-            } else {
-                x = IDEX.getOrDefault("immediate", 0);
+            switch (forwardingA()) {
+                case 0:
+                    x = IDEX.getOrDefault("data1", 0);
+                    break;
+                case 1:
+                    x = writeBackData;
+                    break;
+                default:
+                    x = calculatedForwarding;
             }
-            int y = IDEX.getOrDefault("data1", 0);
+
+            int y;
+            switch (forwardingB()) {
+                case 0:
+                    y = IDEX.getOrDefault("data2", 0);
+                    break;
+                case 1:
+                    y = writeBackData;
+                    break;
+                default:
+                    y = calculatedForwarding;
+            }
+
+            EXMEM.put("data2", y);
+            if (IDEX.getOrDefault("ALUSrc", 0) != 0) {
+                y = IDEX.getOrDefault("immediate", 0);
+            }
             EXMEM.put("calculated", ALU.calc(x, y, IDEX.getOrDefault("ALUOp0", 0), IDEX.getOrDefault("ALUOp1", 0), IDEX.getOrDefault("immediate", 0) & 0x111111));
             EXMEM.put("zero", (EXMEM.getOrDefault("calculated", 0) == 0) ? 1 : 0);
         }
-        EXMEM.put("data2", EXMEM.getOrDefault("data2", 0));
-
         if (IDEX.getOrDefault("regDst", 0) == 0) {
             EXMEM.put("dst", IDEX.getOrDefault("rt", 0));
         } else {
@@ -212,12 +239,14 @@ public class Emulator {
     }
 
     private void writeBack() {
+        writeBackData = 0;
         if (MEMWB.getOrDefault("regWrite", 0) == 1) {
             if (MEMWB.getOrDefault("memToReg", 0) == 1) {
-                registers.set(MEMWB.getOrDefault("dst", 0), MEMWB.getOrDefault("data", 0));
+                writeBackData = MEMWB.getOrDefault("data", 0);
             } else {
-                registers.set(MEMWB.getOrDefault("dst", 0), MEMWB.getOrDefault("calculated", 0));
+                writeBackData = MEMWB.getOrDefault("calculated", 0);
             }
+            registers.set(MEMWB.getOrDefault("dst", 0), writeBackData);
         }
     }
 
@@ -227,5 +256,43 @@ public class Emulator {
 
     public int getClock() {
         return currentClock;
+    }
+
+    private boolean hazardDetection() {
+        return (IDEX.getOrDefault("memRead", 0) == 1 &&
+                (IDEX.getOrDefault("rt", 0).equals(IFID.getOrDefault("rs", 0)) ||
+                        IDEX.getOrDefault("rt", 0).equals(IFID.getOrDefault("rt", 0))));
+    }
+
+    private int forwardingA() {
+        int forwardA = 0;
+        if (EXMEM.getOrDefault("regWrite", 0) == 1
+                && EXMEM.getOrDefault("rd", 0) != 0
+                && EXMEM.getOrDefault("rd", 0).equals(IDEX.getOrDefault("rs", 0)))
+            forwardA = 2;
+        else if (MEMWB.getOrDefault("regWrite", 0) == 1
+                && MEMWB.getOrDefault("rd", 0) != 0
+                && MEMWB.getOrDefault("rd", 0).equals(IDEX.getOrDefault("rs", 0)))
+            forwardA = 1;
+        return forwardA;
+    }
+
+    private int forwardingB() {
+        int forwardB = 0;
+        if (EXMEM.getOrDefault("regWrite", 0) == 1
+                && EXMEM.getOrDefault("rd", 0) != 0
+                && EXMEM.getOrDefault("rd", 0).equals(IDEX.getOrDefault("rt", 0)))
+            forwardB = 2;
+        else if (MEMWB.getOrDefault("regWrite", 0) == 1
+                && MEMWB.getOrDefault("rd", 0) != 0
+                && MEMWB.getOrDefault("rd", 0).equals(IDEX.getOrDefault("rt", 0)))
+            forwardB = 1;
+        return forwardB;
+    }
+
+    private boolean beqHazard() {
+        return new InstrucitonHelper(IDEX.getOrDefault("instruction", 0)).getInstructionName().equals("beq")
+                || new InstrucitonHelper(EXMEM.getOrDefault("instruction", 0)).getInstructionName().equals("beq")
+                || new InstrucitonHelper(MEMWB.getOrDefault("instruction", 0)).getInstructionName().equals("beq");
     }
 }
