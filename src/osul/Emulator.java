@@ -16,7 +16,6 @@ public class Emulator {
     private static final int startLine = 0x10;
 
     private FileChooser inputFile;
-    private FileChooser outputFile;
 
     private Ram ram = new Ram();
     private Registers registers = new Registers();
@@ -34,7 +33,6 @@ public class Emulator {
 
     public Emulator(FileChooser inputFile, FileChooser outputFile) {
         this.inputFile = inputFile;
-        this.outputFile = outputFile;
     }
 
     public void assemble() throws FileNotFoundException, ParseException {

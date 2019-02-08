@@ -9,6 +9,9 @@ import java.util.Map;
 public class Registers {
     private int[] registers = new int[32];
 
+    public Registers() {
+        set(29, 0x00ff_0000); // $sp = 00FF 0000_hex
+    }
 
     public int get(int k) {
         return registers[k];
