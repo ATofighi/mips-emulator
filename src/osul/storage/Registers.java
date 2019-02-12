@@ -4,16 +4,18 @@ import osul.parser.ParseException;
 import osul.parser.Parser;
 
 import java.util.HashMap;
-import java.util.Map;
 
 public class Registers {
     private int[] registers = new int[32];
+
+    HashMap<Integer, Integer> readData = new HashMap<>();
 
     public Registers() {
         set(29, 0x00ff_0000); // $sp = 00FF 0000_hex
     }
 
     public int get(int k) {
+        readData.put(k, registers[k]);
         return registers[k];
     }
 
@@ -27,7 +29,7 @@ public class Registers {
     }
 
     public void set(int k, int v) {
-        if(k != 0) {
+        if (k != 0) {
             registers[k] = v;
         }
     }
@@ -37,7 +39,7 @@ public class Registers {
         StringBuilder sb = new StringBuilder();
         sb.append("{");
         String comma = "";
-        for(int i = 0; i < 32; i++) {
+        for (int i : new int[]{8, 9, 10, 11, 12, 29, 31}) {
             sb.append(comma);
             sb.append(Parser.registerNames[i]);
             sb.append("=");
@@ -46,5 +48,17 @@ public class Registers {
         }
         sb.append("}");
         return sb.toString();
+    }
+
+    public HashMap<String, Integer> getReadData() {
+        HashMap<String, Integer> result = new HashMap<>();
+        readData.forEach((k, v) -> {
+            result.put(Parser.registerNames[k], v);
+        });
+        return result;
+    }
+
+    public void flush() {
+        readData = new HashMap<>();
     }
 }

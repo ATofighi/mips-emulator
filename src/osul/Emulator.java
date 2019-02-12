@@ -9,6 +9,7 @@ import osul.storage.Registers;
 import osul.swing.FileChooser;
 
 import java.io.FileNotFoundException;
+
 import java.util.*;
 
 public class Emulator {
@@ -26,9 +27,12 @@ public class Emulator {
     private Map<String, Integer> IDEX = new HashMap<>();
     private Map<String, Integer> EXMEM = new HashMap<>();
     private Map<String, Integer> MEMWB = new HashMap<>();
+    private Map<String, Integer> newIFID = new HashMap<>();
+    private Map<String, Integer> newIDEX = new HashMap<>();
+    private Map<String, Integer> newEXMEM = new HashMap<>();
+    private Map<String, Integer> newMEMWB = new HashMap<>();
 
     private int pcSrc = 0;
-    private int addedPc = 0;
     private int pc = startLine;
 
     private int writeBackData = 0;
@@ -56,21 +60,33 @@ public class Emulator {
         execution();
         instructionDecode();
         instructionFetch();
-        resultList.add(new Result(currentClock, registers, IFID, IDEX, EXMEM, MEMWB)); // TODO
+        resultList.add(new Result(currentClock, registers, newIFID, newIDEX, newEXMEM, newMEMWB, IFID, IDEX, EXMEM, MEMWB, pc));
+        flush();
         currentClock++;
+        registers.flush();
+    }
+
+    private void flush() {
+        IFID = newIFID;
+        IDEX = newIDEX;
+        EXMEM = newEXMEM;
+        MEMWB = newMEMWB;
+        newIFID = new HashMap<>();
+        newIDEX = new HashMap<>();
+        newEXMEM = new HashMap<>();
+        newMEMWB = new HashMap<>();
     }
 
     private void instructionFetch() {
-        IFID.clear();
         if (pcSrc == 0) {
         } else {
-            pc = addedPc;
+            pc = newMEMWB.getOrDefault("addedPc", 0);
         }
         int insturction = ram.loadWord(pc);
-        IFID.put("instruction", insturction);
+        newIFID.put("instruction", insturction);
         pc += 4;
 
-        IFID.put("pc", pc);
+        newIFID.put("pc", pc);
     }
 
     private void instructionDecode() {
@@ -86,10 +102,12 @@ public class Emulator {
         int ALUSrc = 0;
         int branch = 0;
 //        int PCSrc = 0;
+        newIDEX.putAll(IFID);
         int instruction = IFID.getOrDefault("instruction", 0);
         InstrucitonHelper instrucitonHelper = new InstrucitonHelper(instruction);
         if (hazardDetection() || beqHazard()) {
             pc -= 4;
+            newIDEX.put("instruction", 0);
             // stall
         } else {
             if (instrucitonHelper.getOpcode() == 0) { // R-type
@@ -155,32 +173,29 @@ public class Emulator {
                     break;
             }
         }
-//        IDEX.clear();
-        IDEX.putAll(IFID);
-        IDEX.put("regWrite", regWrite);
-        IDEX.put("regDst", regDst);
-        IDEX.put("branch", branch);
-        IDEX.put("memRead", memRead);
-        IDEX.put("memWrite", memWrite);
-        IDEX.put("memToReg", memToReg);
-        IDEX.put("ALUOp0", ALUOp0);
-        IDEX.put("ALUOp1", ALUOp1);
-        IDEX.put("ALUSrc", ALUSrc);
-        IDEX.put("regWrite", regWrite);
-        IDEX.put("immediate", instrucitonHelper.getSignExtendedImmediate());
-        IDEX.put("rt", instrucitonHelper.getRt()); // 16 - 20
-        IDEX.put("rd", instrucitonHelper.getRd()); // 11 - 15
-        IDEX.put("data1", registers.get(instrucitonHelper.getRs()));
-        IDEX.put("data2", registers.get(instrucitonHelper.getRt()));
-        // TODO: regWrite from writeBack
+
+        newIDEX.put("regWrite", regWrite);
+        newIDEX.put("regDst", regDst);
+        newIDEX.put("branch", branch);
+        newIDEX.put("memRead", memRead);
+        newIDEX.put("memWrite", memWrite);
+        newIDEX.put("memToReg", memToReg);
+        newIDEX.put("ALUOp0", ALUOp0);
+        newIDEX.put("ALUOp1", ALUOp1);
+        newIDEX.put("ALUSrc", ALUSrc);
+        newIDEX.put("regWrite", regWrite);
+        newIDEX.put("immediate", instrucitonHelper.getSignExtendedImmediate());
+        newIDEX.put("rt", instrucitonHelper.getRt()); // 16 - 20
+        newIDEX.put("rd", instrucitonHelper.getRd()); // 11 - 15
+        newIDEX.put("rs", instrucitonHelper.getRs());
+        newIDEX.put("data1", registers.get(instrucitonHelper.getRs()));
+        newIDEX.put("data2", registers.get(instrucitonHelper.getRt()));
     }
 
     private void execution() {
         int calculatedForwarding = EXMEM.getOrDefault("calculated", 0);
-        EXMEM.clear();
-        EXMEM.putAll(IDEX);
-        EXMEM.put("addedPc", IDEX.getOrDefault("pc", 0) + IDEX.getOrDefault("immediate", 0) << 2);
-        addedPc = EXMEM.getOrDefault("addedPc", 0);
+        newEXMEM.putAll(IDEX);
+        newEXMEM.put("addedPc", IDEX.getOrDefault("pc", 0) + (IDEX.getOrDefault("immediate", 0) << 2));
         {
             int x;
             switch (forwardingA()) {
@@ -206,24 +221,24 @@ public class Emulator {
                     y = calculatedForwarding;
             }
 
-            EXMEM.put("data2", y);
+            newEXMEM.put("data2", y);
             if (IDEX.getOrDefault("ALUSrc", 0) != 0) {
                 y = IDEX.getOrDefault("immediate", 0);
             }
-            EXMEM.put("calculated", ALU.calc(x, y, IDEX.getOrDefault("ALUOp0", 0), IDEX.getOrDefault("ALUOp1", 0), IDEX.getOrDefault("immediate", 0) & 0x111111));
-            EXMEM.put("zero", (EXMEM.getOrDefault("calculated", 0) == 0) ? 1 : 0);
+            int calculated = ALU.calc(x, y, IDEX.getOrDefault("ALUOp0", 0), IDEX.getOrDefault("ALUOp1", 0), IDEX.getOrDefault("immediate", 0) & 0b111111);
+            newEXMEM.put("calculated", calculated);
+            newEXMEM.put("zero", (calculated == 0) ? 1 : 0);
         }
         if (IDEX.getOrDefault("regDst", 0) == 0) {
-            EXMEM.put("dst", IDEX.getOrDefault("rt", 0));
+            newEXMEM.put("dst", IDEX.getOrDefault("rt", 0));
         } else {
-            EXMEM.put("dst", IDEX.getOrDefault("rd", 0));
+            newEXMEM.put("dst", IDEX.getOrDefault("rd", 0));
         }
 
     }
 
     private void memoryAccess() {
-        MEMWB.clear();
-        MEMWB.putAll(EXMEM);
+        newMEMWB.putAll(EXMEM);
         pcSrc = EXMEM.getOrDefault("zero", 0) & EXMEM.getOrDefault("branch", 0);
 
         int address = EXMEM.getOrDefault("calculated", 0);
@@ -234,7 +249,7 @@ public class Emulator {
             ram.storeWord(address, writeData);
         }
         if (memRead == 1) {
-            MEMWB.put("data", ram.loadWord(address));
+            newMEMWB.put("data", ram.loadWord(address));
         }
     }
 
@@ -260,19 +275,19 @@ public class Emulator {
 
     private boolean hazardDetection() {
         return (IDEX.getOrDefault("memRead", 0) == 1 &&
-                (IDEX.getOrDefault("rt", 0).equals(IFID.getOrDefault("rs", 0)) ||
-                        IDEX.getOrDefault("rt", 0).equals(IFID.getOrDefault("rt", 0))));
+                (IDEX.getOrDefault("rt", 0).equals(new InstrucitonHelper(IFID.getOrDefault("instruction", 0)).getRs()) ||
+                        IDEX.getOrDefault("rt", 0).equals(new InstrucitonHelper(IFID.getOrDefault("instruction", 0)).getRt())));
     }
 
     private int forwardingA() {
         int forwardA = 0;
         if (EXMEM.getOrDefault("regWrite", 0) == 1
-                && EXMEM.getOrDefault("rd", 0) != 0
-                && EXMEM.getOrDefault("rd", 0).equals(IDEX.getOrDefault("rs", 0)))
+                && EXMEM.getOrDefault("dst", 0) != 0
+                && EXMEM.getOrDefault("dst", 0).equals(IDEX.getOrDefault("rs", 0)))
             forwardA = 2;
         else if (MEMWB.getOrDefault("regWrite", 0) == 1
-                && MEMWB.getOrDefault("rd", 0) != 0
-                && MEMWB.getOrDefault("rd", 0).equals(IDEX.getOrDefault("rs", 0)))
+                && MEMWB.getOrDefault("dst", 0) != 0
+                && MEMWB.getOrDefault("dst", 0).equals(IDEX.getOrDefault("rs", 0)))
             forwardA = 1;
         return forwardA;
     }
@@ -280,12 +295,12 @@ public class Emulator {
     private int forwardingB() {
         int forwardB = 0;
         if (EXMEM.getOrDefault("regWrite", 0) == 1
-                && EXMEM.getOrDefault("rd", 0) != 0
-                && EXMEM.getOrDefault("rd", 0).equals(IDEX.getOrDefault("rt", 0)))
+                && EXMEM.getOrDefault("dst", 0) != 0
+                && EXMEM.getOrDefault("dst", 0).equals(IDEX.getOrDefault("rt", 0)))
             forwardB = 2;
         else if (MEMWB.getOrDefault("regWrite", 0) == 1
-                && MEMWB.getOrDefault("rd", 0) != 0
-                && MEMWB.getOrDefault("rd", 0).equals(IDEX.getOrDefault("rt", 0)))
+                && MEMWB.getOrDefault("dst", 0) != 0
+                && MEMWB.getOrDefault("dst", 0).equals(IDEX.getOrDefault("rt", 0)))
             forwardB = 1;
         return forwardB;
     }

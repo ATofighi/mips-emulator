@@ -2,6 +2,7 @@ package osul.parser;
 
 public class InstrucitonHelper {
     private int instruction;
+
     public InstrucitonHelper(int instruction) {
         this.instruction = instruction;
     }
@@ -45,7 +46,7 @@ public class InstrucitonHelper {
     public int getSignExtendedImmediate() {
         int immediate = instruction & 0b1111111111111111;
         int sign = immediate >>> 15;
-        for(int i = 16; i < 32; i++) {
+        for (int i = 16; i < 32; i++) {
             immediate |= sign << i;
         }
         return immediate;
@@ -61,5 +62,10 @@ public class InstrucitonHelper {
 
     public int getRs() {
         return (instruction >>> 21) & 0b11111;
+    }
+
+    @Override
+    public String toString() {
+        return getInstructionName() + " " + Integer.toBinaryString(instruction);
     }
 }

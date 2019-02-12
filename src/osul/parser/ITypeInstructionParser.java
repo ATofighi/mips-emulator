@@ -31,9 +31,9 @@ public abstract class ITypeInstructionParser implements InstructionParser {
     protected int getImmediate() throws ParseException {
         try {
             int res = Integer.parseInt(getParameter(2));
-            if((res & 0b11111111111111110000000000000000) != 0) {
-                throw new ParseException("Immediate must be 16 bits: " + res);
-            }
+//            if((res & 0b11111111111111110000000000000000) != 0) {
+//                throw new ParseException("Immediate must be 16 bits: " + res);
+//            }
             return res;
         } catch (Exception e) {
             throw new ParseException(e.getMessage());
