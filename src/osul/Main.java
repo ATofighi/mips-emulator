@@ -1,11 +1,9 @@
 package osul;
 
-import osul.swing.ClockResultButton;
-import osul.swing.FileChooser;
-import osul.swing.Frame;
-import osul.swing.AssembleButton;
+import osul.swing.*;
 
-import javax.swing.*;
+import java.io.FileNotFoundException;
+import java.util.Scanner;
 
 public class Main {
     public static void main(String[] args) {
@@ -14,20 +12,41 @@ public class Main {
     }
 
     private void startSwing() {
-        FileChooser inputFile = new FileChooser(FileChooser.Type.OPEN);
-        FileChooser outputFile = new FileChooser(FileChooser.Type.SAVE);
+        FileChooser outputFile = new FileChooser(FileChooser.Type.SAVE, "Result File");
+        Editor editor = new Editor(800, 600);
+
+        FileChooser inputFile = new FileChooser(FileChooser.Type.OPEN, "Open", (f) -> {
+            try {
+                Scanner scanner = new Scanner(f);
+                StringBuilder text = new StringBuilder();
+                while(scanner.hasNextLine()) {
+                    text.append(scanner.nextLine()).append("\n");
+                }
+                editor.getTextArea().setText(text.toString());
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            }
+        });
 
         Frame frame = new Frame();
-        frame.add(new JLabel("Input:"));
+        frame.add(editor);
+        inputFile.setBounds(0, 500, 200, 50);
         frame.add(inputFile);
 
-        frame.add(new JLabel("Output:"));
+        outputFile.setBounds(200, 500, 200, 50);
         frame.add(outputFile);
 
-        AssembleButton assembleButton = new AssembleButton(inputFile, outputFile);
+
+        AssembleButton assembleButton = new AssembleButton(editor, outputFile);
         ClockResultButton clockResultButton = new ClockResultButton(assembleButton, outputFile);
 
+
+
+        assembleButton.setBounds(400, 500, 200, 50);
         frame.add(assembleButton);
+
+
+        clockResultButton.setBounds(600, 500, 182, 50);
         frame.add(clockResultButton);
 
 

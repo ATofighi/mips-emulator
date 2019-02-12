@@ -6,17 +6,16 @@ import osul.parser.ParseException;
 import osul.parser.Parser;
 import osul.storage.Ram;
 import osul.storage.Registers;
+import osul.swing.Editor;
 import osul.swing.FileChooser;
 
 import java.io.FileNotFoundException;
-
 import java.util.*;
 
 public class Emulator {
 
     private static final int startLine = 0x10;
 
-    private FileChooser inputFile;
 
     private Ram ram = new Ram();
     private Registers registers = new Registers();
@@ -36,13 +35,14 @@ public class Emulator {
     private int pc = startLine;
 
     private int writeBackData = 0;
+    private Editor editor;
 
-    public Emulator(FileChooser inputFile, FileChooser outputFile) {
-        this.inputFile = inputFile;
+    public Emulator(Editor editor, FileChooser outputFile) {
+        this.editor = editor;
     }
 
     public void assemble() throws FileNotFoundException, ParseException {
-        Scanner scanner = new Scanner(inputFile.getFile());
+        Scanner scanner = new Scanner(editor.getTextArea().getText());
         LinesTable linesTable = new LinesTable();
         for (int i = startLine; scanner.hasNextLine(); i += 4) {
             String line = scanner.nextLine().trim();
