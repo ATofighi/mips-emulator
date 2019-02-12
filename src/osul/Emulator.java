@@ -37,6 +37,9 @@ public class Emulator {
     private int writeBackData = 0;
     private Editor editor;
 
+    private ArrayList<Integer> aluResults = new ArrayList<>();
+    private ArrayList<Integer> aluInputs = new ArrayList<>();
+
     public Emulator(Editor editor, FileChooser outputFile) {
         this.editor = editor;
     }
@@ -60,10 +63,13 @@ public class Emulator {
         execution();
         instructionDecode();
         instructionFetch();
-        resultList.add(new Result(currentClock, registers, newIFID, newIDEX, newEXMEM, newMEMWB, IFID, IDEX, EXMEM, MEMWB, pc));
+        resultList.add(new Result(currentClock, registers, newIFID, newIDEX, newEXMEM, newMEMWB, IFID, IDEX, EXMEM, MEMWB, pc, ram, aluInputs, aluResults));
         flush();
         currentClock++;
         registers.flush();
+        ram.flush();
+        aluResults = new ArrayList<>();
+        aluInputs = new ArrayList<>();
     }
 
     private void flush() {
@@ -196,6 +202,7 @@ public class Emulator {
         int calculatedForwarding = EXMEM.getOrDefault("calculated", 0);
         newEXMEM.putAll(IDEX);
         newEXMEM.put("addedPc", IDEX.getOrDefault("pc", 0) + (IDEX.getOrDefault("immediate", 0) << 2));
+        aluResults.add(IDEX.getOrDefault("pc", 0) + (IDEX.getOrDefault("immediate", 0) << 2));
         {
             int x;
             switch (forwardingA()) {
@@ -226,6 +233,12 @@ public class Emulator {
                 y = IDEX.getOrDefault("immediate", 0);
             }
             int calculated = ALU.calc(x, y, IDEX.getOrDefault("ALUOp0", 0), IDEX.getOrDefault("ALUOp1", 0), IDEX.getOrDefault("immediate", 0) & 0b111111);
+            aluInputs.add(x);
+            aluInputs.add(y);
+            aluInputs.add(IDEX.getOrDefault("ALUOp0", 0));
+            aluInputs.add(IDEX.getOrDefault("ALUOp1", 0));
+            aluInputs.add(IDEX.getOrDefault("immediate", 0) & 0b111111);
+            aluResults.add(calculated);
             newEXMEM.put("calculated", calculated);
             newEXMEM.put("zero", (calculated == 0) ? 1 : 0);
         }

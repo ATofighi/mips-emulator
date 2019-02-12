@@ -1,7 +1,6 @@
 package osul.swing;
 
 import javax.swing.*;
-import java.io.FileNotFoundException;
 import java.io.PrintStream;
 
 public class ClockResultButton extends JButton {
@@ -28,7 +27,7 @@ public class ClockResultButton extends JButton {
                         printStream.println(assembleButton.getEmulator().getResult(clockNumber));
                         System.out.println(clockNumber);
                     }
-                } catch (FileNotFoundException e) {
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
